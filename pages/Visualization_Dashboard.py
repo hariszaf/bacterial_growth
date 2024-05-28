@@ -6,6 +6,7 @@ from streamlit_extras.app_logo import add_logo
 import streamlit.components.v1 as components
 import sys
 import os
+import numpy as np
 filepath = os.path.realpath(__file__)
 current_dir = os.path.dirname(filepath)
 root_dir = os.path.dirname(current_dir)
@@ -80,6 +81,11 @@ def dashboard():
         path = relative_path_to_src + f"/Data/Growth/{studyID_to_visualize}"
         growth_file = path + f"/Growth_Metabolites.csv"
         reads_file = path + f"/Sequencing_Reads.csv"
+        st.info(path)
+        if os.path.exists(path):
+            st.info("growth path exists")
+        else:
+            st.info("growth path DO NOT exists")
 
 
         try:
@@ -150,7 +156,11 @@ def tabs_plots(experiment_with_bioreps):
                 if 'OD' in growth_df.columns:
                     with st.expander(f"**OD Data for Experiment: {exp}**"):
                         st.dataframe(growth_df[["Biological_Replicate_id","Time","OD"]])
-                    fig = px.line(growth_df, x='Time', y='OD',color='Biological_Replicate_id' ,title=f'OD Plot for Experiment: {exp} per Biological replicates')
+                    fig = px.line(growth_df, x='Time', y='OD',color='Biological_Replicate_id' ,title=f'OD Plot for Experiment: {exp} per Biological replicates',
+                                  labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("The Biological Replicate ID selected do not contain OD data")
@@ -159,7 +169,11 @@ def tabs_plots(experiment_with_bioreps):
                 if 'Plate_counts' in growth_df.columns:
                     with st.expander(f"**Plate Counts: {exp}**"):
                         st.dataframe(growth_df[["Biological_Replicate_id","Time","Plate_counts"]])
-                    fig = px.line(growth_df, x='Time', y='Plate_counts',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates')
+                    fig = px.line(growth_df, x='Time', y='Plate_counts',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates',
+                                  labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("The Biological Replicate IDs selected do not contain Plate Counts data")
@@ -168,7 +182,11 @@ def tabs_plots(experiment_with_bioreps):
                 if 'pH' in growth_df.columns:
                     with st.expander(f"**pH: {exp}**"):
                         st.dataframe(growth_df[["Biological_Replicate_id","Time","pH"]])
-                    fig = px.line(growth_df, x='Time', y='pH',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates')
+                    fig = px.line(growth_df, x='Time', y='pH',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates',
+                                  labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("The Biological Replicate IDs selected do not contain pH data")
@@ -178,10 +196,45 @@ def tabs_plots(experiment_with_bioreps):
                     with st.expander(f"**FC: {exp}**"):
                         st.dataframe(growth_df[["Biological_Replicate_id","Time","FC"]])
 
-                    fig = px.line(growth_df, x='Time', y='FC',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates')
+                    fig = px.line(growth_df, x='Time', y='FC',color='Biological_Replicate_id' ,title=f'Plate Counts for Experiment:{exp} per Biological replicates',
+                                  labels={
+                                        'Time': 'Hours',
+                                        'FC': 'Cells/mL',
+                                    },
+                                    markers=True)
                     st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("The Biological Replicate IDs selected do not contain FC data")
+
+            for exp, reads_df in result_reads_df_dict.items():
+                counts_col = [col for col in reads_df.columns if not col.endswith('_reads')]
+                if counts_col:
+                    with st.expander(f"**FC counts per Species: {exp}**"):
+                        st.dataframe(reads_df)
+                    unique_biorep_ids = reads_df['Biological_Replicate_id'].unique()
+                    for biorepID in unique_biorep_ids:
+                        filtered_per_biorep_df = reads_df[reads_df['Biological_Replicate_id'] == biorepID]
+                        #non_nan_columns = filtered_per_biorep_df.columns[filtered_per_biorep_df.notna().any()].tolist()
+                        filtered_per_biorep_df = filtered_per_biorep_df.dropna(axis=1,how='all')
+                        species_columns = filtered_per_biorep_df.filter(like='_counts').columns
+
+                        melted_df = filtered_per_biorep_df.melt(id_vars=['Time', 'Biological_Replicate_id'],
+                                    value_vars=species_columns,
+                                    var_name='Species', value_name='Cells/mL')
+                        melted_df['Log_Cells/mL'] = np.log10(melted_df['Cells/mL'])
+                        on = st.toggle("Apply Log", key=f"toogle_FC_{biorepID}")
+                        if on:
+                            fig = px.line(melted_df, x='Time', y='Log_Cells/mL',color='Species' ,title=f'FC Counts: {biorepID} per Microbial Strain',
+                                            labels={
+                                            'Time': 'Hours',
+                                        },
+                                        markers=True)
+                        else:
+                            fig = px.line(melted_df, x='Time', y='Cells/mL',color='Species' ,title=f'FC Counts: {biorepID} per Microbial Strain',
+                                            labels={
+                                            'Time': 'Hours',
+                                        },
+                                        markers=True)
+                        st.plotly_chart(fig, use_container_width=True)
+
         with tab5:
             for exp, reads_df in result_reads_df_dict.items():
                 reads_col = [col for col in reads_df.columns if not col.endswith('_reads')]
@@ -198,9 +251,17 @@ def tabs_plots(experiment_with_bioreps):
                         melted_df['Log_Cells/mL'] = np.log10(melted_df['Cells/mL'])
                         on = st.toggle("Apply Log", key=f"toogle_{biorepID}")
                         if on:
-                            fig = px.line(melted_df, x='Time', y='Log_Cells/mL',color='Species' ,title=f'16S rRNA Sequencing Counts: {biorepID} per Microbial Strain')
+                            fig = px.line(melted_df, x='Time', y='Log_Cells/mL',color='Species' ,title=f'16S rRNA Sequencing Counts: {biorepID} per Microbial Strain',
+                                          labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                         else:
-                            fig = px.line(melted_df, x='Time', y='Cells/mL',color='Species' ,title=f'16S rRNA Sequencing Counts: {biorepID} per Microbial Strain')
+                            fig = px.line(melted_df, x='Time', y='Cells/mL',color='Species' ,title=f'16S rRNA Sequencing Counts: {biorepID} per Microbial Strain',
+                                          labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                         st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("The Biological Replicate IDs selected do not contain 16S rRNA Sequencing data")
@@ -214,12 +275,17 @@ def tabs_plots(experiment_with_bioreps):
                     unique_biorep_ids = growth_df['Biological_Replicate_id'].unique()
                     for biorepID in unique_biorep_ids:
                         filtered_per_biorep_df = growth_df[reads_df['Biological_Replicate_id'] == biorepID]
-                        metabolites_columns = filtered_per_biorep_df.filter(columns_to_keep)
+                        filtered_per_biorep_df = filtered_per_biorep_df.dropna(axis=1, how='all')
+                        metabolites_columns = filtered_per_biorep_df.filter(columns_to_keep).columns
                         melted_df = filtered_per_biorep_df.melt(id_vars=['Time', 'Biological_Replicate_id'],
                                 value_vars=metabolites_columns,
-                                var_name='Metabolites', value_name='mg/L')
+                                var_name='Metabolites', value_name='mM')
                         print(melted_df.head())
-                        fig = px.line(melted_df, x='Time', y='mg/L',color='Metabolites',title=f'Metabolites Concentrations: {biorepID} per Metabolite')
+                        fig = px.line(melted_df, x='Time', y='mM',color='Metabolites',title=f'Metabolites Concentrations: {biorepID} per Metabolite',
+                                      labels={
+                                        'Time': 'Hours',
+                                    },
+                                    markers=True)
                         st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("The Biological Replicate IDs selected do not contain Metabolite data")
@@ -237,7 +303,7 @@ def tabs_plots(experiment_with_bioreps):
 # if __name__ == "__main__":
 
 df_growth, df_reads, studyID_to_visualize, conn = dashboard()
-st.info(df_growth)
+#st.info(df_growth)
 col1, col2 = st.columns([0.35, 0.65])
 try:
     df_growth,experiment_with_bioreps=content(df_growth, df_reads, studyID_to_visualize, conn)
