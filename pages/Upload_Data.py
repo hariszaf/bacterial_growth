@@ -115,10 +115,10 @@ def load_yaml(file_path):
 
 @st.cache_data
 def taxonomy_df_for_taxa_list(taxa_list, _conn):
-    """
-    Using an already established connection to the db, get a dataframe with hits for a list of taxa.
-    NOTE: Remebmer that it takes a list as input, thus if you are about to query for a single term, make a list with sole element.
-    """
+    # """
+    # Using an already established connection to the db, get a dataframe with hits for a list of taxa.
+    # NOTE: Remebmer that it takes a list as input, thus if you are about to query for a single term, make a list with sole element.
+    # ""
     dfs = []
     for taxon in taxa_list:
         if taxon == "":
@@ -130,9 +130,9 @@ def taxonomy_df_for_taxa_list(taxa_list, _conn):
 
 
 def display_strain_row(index):
-    """
-    Add 4-cols template for addin a new strain without an NCBI Taxonomy Id when other_strains is "No"
-    """
+    # """
+    # Add 4-cols template for addin a new strain without an NCBI Taxonomy Id when other_strains is "No"
+    # """
     row_strain_data = {}
 
     if index not in st.session_state['rows_communities']:
@@ -170,6 +170,8 @@ def display_strain_row(index):
 
             # Columns for taxa with NCBI Tax Id available
             col3_add, col4_add, col6_add= st.columns([0.39, 0.39, 0.10])
+            info = []
+            warning = []
             with col3_add:
                 input_other_taxa = st.text_input(
                     '*Search microbial strain species:',
@@ -192,26 +194,31 @@ def display_strain_row(index):
                     )
                     if other_taxonomy is not None:
                         if other_name == "":
-                            st.warning("Please make sure you provide a name before you continue.")
+                            warning.append("Please make sure you provide a name before you continue.")
                         if other_description == "":
-                            st.warning("Please make sure you provide a description to before you continue.")
+                            warning.append("Please make sure you provide a description to before you continue.")
 
                         row_strain_data["case_number"] = index
                         row_strain_data['parent_taxon'] = other_taxonomy
                         row_strain_data['parent_taxon_id'] = df_other_taxonomy[
-                            df_other_taxonomy["tax_names"] == other_taxonomy
-                            ]["tax_id"].item()
+                                    df_other_taxonomy["tax_names"] == other_taxonomy
+                                    ]["tax_id"].item()
 
                         parent_strains_df = taxonomy_df_for_taxa_list([other_taxonomy], conn)
                         strains_df = parent_strains_df[ parent_strains_df['tax_names'] == other_taxonomy ]
                         taxa_id = strains_df.iloc[0]['tax_id']
                         row_strain_data['parent_taxon_id'] = taxa_id
 
-                        st.info(
+                        info.append(
                             f'For more information about **{other_taxonomy}** go to the \
-                                NCBI Taxonomy ID:[{taxa_id}](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id={taxa_id})',
-                            icon="❕"
+                                NCBI Taxonomy ID:[{taxa_id}](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id={taxa_id})'
                         )
+            if warning:
+                for i in warning:
+                    st.warning(i)
+            if info:
+                for j in info:
+                    st.info(j)
 
         # Buttons
         with col6_add:
@@ -263,9 +270,9 @@ def tab_step1():
             - [x] **Add a new study to a previous project:** Choose this option if you're updating a new study to an already existing project.
             - [x] **Add a new version of a study to a previous project:** Choose this option if you're updating a new study version to an already existing project.
 
-            **Unique study ID:** Please provide the unique study ID of the previous study you wish to update. This ensures continuity and helps us maintain the database up to data.
+            **Private study ID:** Please provide the unique study ID of the previous study you wish to update. This ensures continuity and helps us maintain the database up to data.
 
-            **Unique project ID:** Please provide the unique project ID of the existing project where you wish to add a new study or update a previous created study.
+            **Private project ID:** Please provide the unique project ID of the existing project where you wish to add a new study or update a previous created study.
 
             If you do not remember the unique IDs please follow the intructions in (link).
             """)
@@ -396,16 +403,16 @@ def tab_step1():
 
 
 def tab_step2():
-    """
-    Main upload function:
-    invokes the display_strain_row() function for each new entry of novel taxa (without an NCBI Taxonomy Id.)
+    # """
+    # Main upload function:
+    # invokes the display_strain_row() function for each new entry of novel taxa (without an NCBI Taxonomy Id.)
 
-    Returns:
-        - keywords:         species names with exact NCBI Taxonomy Ids
-        - list_taxa_id:     NCBI Taxonomy Ids of the keywords
-        - all_strain_data:  species names that do not match to an exact NCBI Taxonomy Ids
-        - other_taxa_list:  NCBI Taxonomy Ids of the parent taxa of the all_strain_data
-    """
+    # Returns:
+    #     - keywords:         species names with exact NCBI Taxonomy Ids
+    #     - list_taxa_id:     NCBI Taxonomy Ids of the keywords
+    #     - all_strain_data:  species names that do not match to an exact NCBI Taxonomy Ids
+    #     - other_taxa_list:  NCBI Taxonomy Ids of the parent taxa of the all_strain_data
+    # """
     keywords = []
     all_strain_data = []
     list_taxa_id = []
@@ -424,15 +431,15 @@ def tab_step2():
     with tab2:
 
         if st.session_state['verify'] == 1:
-            """
-            Step 2: Describing the strains
-            """
+            # """
+            # Step 2: Describing the strains
+            # """
             df_taxonomy = ""
             st.subheader("2. Select all the microbial strains used in the study")
             st.markdown(
                 """
                 Using the search tap bellow, select all the microbial strains used in your study as well as any uncultured communities, click on 'add' to include the selected option.
-                Once you are sure all the different community members are defined, click on 'save'.
+                If you do not find all of the microbial strains define you own by specifying its name and parent strain species. Once you are sure all the different community members are defined, click on 'save'.
                 """
             )
             # Strains with NCBI Taxonomy Ids.
@@ -551,9 +558,9 @@ def tab_step2():
 
 
 def tab_step3(keywords, list_taxa_id, all_strain_data,create_private_project_id, unique_study_id_val):
-    """
-    Step 3: Download templates tab
-    """
+    # """
+    # Step 3: Download templates tab
+    # """
     metabo_col = []
     measure_tech = []
     all_taxa = []
@@ -568,9 +575,6 @@ def tab_step3(keywords, list_taxa_id, all_strain_data,create_private_project_id,
 
             with colu1:
 
-                """
-                RAW DATA TEMPLATE
-                """
 
                 st.subheader("1. Download the Data Template")
                 st.markdown(
@@ -681,7 +685,7 @@ def tab_step3(keywords, list_taxa_id, all_strain_data,create_private_project_id,
                 st.text('')
                 down_button = st.download_button(label='Click here to Download the Data Template',
                                     data=excel_rawdata,
-                                    file_name='template_raw_data.xlsx',
+                                    file_name='raw_data_template.xlsx',
                                     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                     type="primary",
                                     use_container_width = True,
@@ -698,11 +702,11 @@ def tab_step3(keywords, list_taxa_id, all_strain_data,create_private_project_id,
                     """
                     Click in the button to download the study template Excel file. The file contains four sheets:
                     - **README:** Read first before complete the other sheet. This provides detailed instruction for each of the columns in every of the following sheets.
-                    - **STUDY:** In this sheet you will have to complete the basic information of the Study you are about to upload. A Study is always part of a Project so you will have to provide the corresponding **project unique ID**.
-                    - **EXPERIMENTS** In this sheet you will complete all the details of your study. Each row represent an **Experiment** and each column specific information about it. Fill as many rows as many different experiments you have in your study. **ORANGE COLUMNS** are present in other sheets and should be completed with the same values.
-                    - **COMPARTMENTS:** Details of the different compartments used for the experiments. If identical conditions across different experiments occur, these should be considered as a single compartment. So complete as many rows as different conditions setups you have among the experiments in your study (**EXPERIMENTS** rows).
-                    - **COMMUNITY_MEMBERS:** Information with respect to the various strains used in this study. Each row in this tab corresponds to a strain that has been part of at least one experiment.
-                    - **COMMUNITIES:** Definition of the microbial **COMMUNITIES** using the **Member_ID** auto-completed in **COMMUNITY_MEMBERS** sheet. Each row represents a different community. These **COMMUNITIES** are then used in the **EXPERIMENTS** sheet to describe the community used per experiment in each compartment.
+                    - **STUDY:** In this sheet you will have to complete the basic information of the Study you are about to upload.
+                    - **EXPERIMENTS** In this sheet you will complete all the details of each of the experiments in your study. Each row represent an **Experiment** and each column specific information about it. Fill as many rows as many different experiments you have in your study. **ORANGE COLUMNS** are present in other sheets and should be completed with the same values.
+                    - **COMPARTMENTS:** Details of the different compartments used for the experiments. If identical conditions across different experiments occur, these should be considered as a single compartment as long as they used the same microbial community. So complete as many rows as different conditions setups you have among the experiments in your study (**EXPERIMENTS** rows).
+                    - **COMMUNITY_MEMBERS:** Information with respect to the various strains used in this study. This tab will be dynamically generated. Please used the same Member_IDs in the **COMMUNITIES**.
+                    _ **COMMUNITIES:** Define all the different communities used in your study by using the Member_IDs given in the **COMMUNITY_MEMBERS** sheet.
                     - **PERTURBATIONS:** In this sheet you will fill all the information related to the different perturbations made to an experiment (**Experiment_ID**). There are two types of perturbations possible: when altering compartment conditions such as: pH, temperature etc. or when adding new microbial **COMMUNITIES** like: environmental samples or new microvial strains.
                     Complete each section carefully according to the instructions. **DO NOT** modify the file by adding or deleating columns.
                     """)
@@ -723,7 +727,7 @@ def tab_step3(keywords, list_taxa_id, all_strain_data,create_private_project_id,
 
                 down_study_button = st.download_button(label='Click here to Download the Study Template',
                                                        data=excel_data,
-                                                       file_name='raw_data.xlsx',
+                                                       file_name='study_template.xlsx',
                                                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                                        type="primary",
                                                        use_container_width = True
@@ -749,7 +753,7 @@ def tab_step4():
             st.markdown(
             """
             Upload below the Excel Data file once completed with all the data measured in your
-            study according to the instructions provided in the **Step 2**. Remember that no modifications are allowed after
+            study according to the instructions provided in the **Step 3**. Remember that no modifications are allowed after
             you submit the data. Please double check below that all the celds are correct.
             """)
             uploaded_file = st.file_uploader("Upload data file .xlsx here:", help='Only one .xlsx file allowed')
@@ -775,8 +779,8 @@ def tab_step4():
             st.subheader("2. Upload Study Template")
             st.markdown(
             """
-            Upload below the Excel Data file once completed with all the data measured in your
-            study according to the instructions provided in the **Step 2**. Remember that no modifications are allowed after
+            Upload below the Excel Study file once completed with all the data measured in your
+            study according to the instructions provided in the **Step 3**. Remember that no modifications are allowed after
             you submit the data. Please double check below that all the celds are correct.
             """)
 
@@ -822,9 +826,9 @@ def tab_step4():
 
 
 def tab_step5(xls_1, xls_2, measure_tech, metabo_col, all_taxa, conn, project_name, project_description):
-    """
-    Submit data page
-    """
+    # """
+    # Submit data page
+    # """
     with tab5:
         st.subheader("Data visibility")
         st.write("By default your data will be visible and public in the database. Do you want to make your data visible now?")

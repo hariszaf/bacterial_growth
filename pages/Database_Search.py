@@ -1,19 +1,22 @@
 import os
 import sys
 import streamlit as st
+from io import BytesIO
+import zipfile
+import base64
+import pandas as pd
 from streamlit_extras.app_logo import add_logo
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Database Search", page_icon="🔍", layout='wide')
 
 # Load local modules
-current_dir = os.path.dirname(os.path.realpath(__file__))
-repo_dir = os.path.dirname(os.path.dirname(current_dir))
-relative_path_to_src = os.path.join(repo_dir, 'src')
+filepath = os.path.realpath(__file__)
+current_dir = os.path.dirname(filepath)
+root_dir = os.path.dirname(current_dir)
+relative_path_to_src = os.path.join(root_dir, 'src')
 sys.path.append(relative_path_to_src)
-sys.path.append(current_dir)
-
-from Visualization_Dashboard import dashboard
+#from Visualization_Dashboard import dashboard
 from db_functions import dynamical_query, getGeneralInfo, getExperiments, \
     getCompartment, getCommunities, getMicrobialStrains, getBiorep, getAbundance, \
     getFC, getMetabolite, getPerturbations
@@ -30,6 +33,8 @@ max_value_ph = 14.0
 min_value_ph_add = 0.0
 max_value_ph_add = 14.0
 
+def gosearch():
+    st.session_state.gosearch = True
 
 def increase_rows():
     index = len(st.session_state['rows'])
@@ -50,9 +55,9 @@ def toggle_container(index):
 
 
 def display_row(index):
-    """
-    Filters for advanced search
-    """
+    # """
+    # Filters for advanced search
+    # """
     advance_query = {}
 
     if index not in st.session_state['rows']:
@@ -105,6 +110,43 @@ def display_row(index):
                     st.session_state[f'delete_query_visible_{index}'] = False
     return advance_query
 
+def createzip(study_ids_list):
+
+    buf = BytesIO()
+
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as csv_zip:
+        for study_id in study_ids_list:
+            folder_path = relative_path_to_src + f"/Data/Growth/{study_id}"
+            #st.info(folder_path)
+            growth_file = folder_path + f"/Growth_Metabolites.csv"
+            reads_file = folder_path + f"/Sequencing_Reads.csv"
+            try:
+                df_growth = pd.read_csv(growth_file)
+            # Continue with processing the dataframe...
+            except FileNotFoundError:
+                st.info(f"CSV file '{growth_file}' not found. Skipping...")
+            df_growth = pd.read_csv(growth_file)
+            #st.info("ESTOY AQUI")
+            df_reads = pd.read_csv(reads_file)
+            if not df_growth.empty:
+                csv_zip.writestr(f"{study_id}_Growth_Metabolites.csv", df_growth.to_csv())
+            if not df_reads.empty:
+                csv_zip.writestr(f"{study_id}_Sequencing_Reads.csv", df_reads.to_csv())
+
+    buf.seek(0)
+    zip_name = "MySearch.zip"
+    b64 = base64.b64encode(buf.read()).decode()
+    del buf
+    href = f'<a href=\"data:file/zip;base64,{b64}\" download="{zip_name}">Click Here To download Zip file</a>'
+    st.markdown(href, unsafe_allow_html=True)
+    # st.download_button(
+    #         label="Download zip",
+    #         data=buf.getvalue(),
+    #         file_name="MySearch.zip",
+    #         mime="application/zip",
+    #     )
+
+
 
 def db_search():
 
@@ -135,6 +177,8 @@ def db_search():
 
     all_advance_query = []
     first_query = {}
+
+    selected_study_ids = []
 
     # Use columns to lay out the elements side by side
     col1, col2 = st.columns([1, 2])
@@ -178,7 +222,8 @@ def db_search():
         '**Search Data**',
         key='search_button',
         disabled=st.session_state.preventSearching,
-        type='primary'
+        type='primary',
+        on_click=gosearch
     )
 
 
@@ -189,7 +234,7 @@ def db_search():
         st.session_state.form = False
 
     # if search_button or st.session_state.form:
-    if search_button or st.session_state.form:
+    if search_button or st.session_state.form or 'gosearch' in st.session_state:
 
         # Once search is clicked a table pops up
         # If a growth_df is clicked then jump into the dashboard page using that as input
@@ -199,8 +244,11 @@ def db_search():
         final_query = dynamical_query(all_advance_query)
 
         conn = st.connection("BacterialGrowth", type="sql")
-        df_studies = conn.query(final_query)  # , ttl=None
+        
+        if conn is None:
+            st.warning("Please contact the developers (sofia.monsalveduarte@student.kuleuven.be or haris.zafeiropoulos@kuleuven.be) to fire the database first.")
 
+        df_studies = conn.query(final_query)  # , ttl=None
         num_results = len(df_studies)
 
         if num_results == 0:
@@ -212,19 +260,21 @@ def db_search():
 
             with st.form(key="Results"):
 
-                c1 , c2 = st.columns([0.05, 0.95])
+                #c1 , c2 = st.columns([0.05, 0.95])
 
                 for i in range(len(df_studies)):
 
+                    c1 , c2 = st.columns([0.05, 0.95])
+                    study_id = df_studies['studyId'][i]
                     with c1:
-                        down_check = st.checkbox(f"{i+1}",key=f'checkbox{i}')
+                        down_check = st.checkbox(f"{i+1}",key=f'checkbox{study_id}')
 
                     with c2:
                         study_id = df_studies['studyId'][i]
                         study_ids.append(study_id)
                         df_general = getGeneralInfo(study_id, conn)
                         print(df_general)
-                        study_name = df_general['studyName'][i]
+                        study_name = df_general['studyName'][0]
                         transposed_df = df_general.T
                         studyname = st.page_link("pages/Visualization_Dashboard.py",
                                                 label= f':blue[**{study_name}**]'
@@ -249,28 +299,43 @@ def db_search():
                         space = st.text("")
 
                         with st.expander("**Microbial Strains and Communities**"):
-                            df_Compartment = getCommunities(study_id, conn)
-                            st.dataframe(df_Compartment,hide_index=True,)
+                            df_Community = getCommunities(study_id, conn)
+                            if not df_Community.empty:
+                                st.write("**Communities information**")
+                                st.dataframe(df_Compartment,hide_index=True,)
                             df_strains = getMicrobialStrains(study_id, conn)
-                            st.dataframe(df_strains,hide_index=True,)
+                            if not df_strains.empty:
+                                st.write("**Community Members information**")
+                                st.dataframe(df_strains,hide_index=True,)
 
                         space = st.text("")
 
                         with st.expander("**Biological Replicates, Growth and Metabolites Measurements**"):
                             df_biorep = getBiorep(study_id, conn)
-                            st.dataframe(df_biorep,hide_index=True,)
+                            if not df_biorep.empty:
+                                st.write("**Biological Replicates Metadata**")
+                                st.dataframe(df_biorep,hide_index=True,)
+                            
                             df_abundance = getAbundance(study_id, conn)
-                            st.dataframe(df_abundance,hide_index=True,)
+                            if not df_abundance.empty:
+                                st.write("**Abundance data per Biological Replicates and microbial species**")
+                                st.dataframe(df_abundance,hide_index=True,)
+
                             df_FC = getFC(study_id, conn)
-                            st.dataframe(df_FC,hide_index=True,)
+                            if not df_FC.empty:
+                                st.write("**Flow Cytometry Counts data per Biological Replicates and microbial species**")
+                                st.dataframe(df_FC,hide_index=True,)
+
                             df_Metabolite = getMetabolite(study_id, conn)
-                            st.dataframe(df_Metabolite,hide_index=True,)
+                            if not df_Metabolite.empty:
+                                st.write("**Metabolites measured per Biological Replicates**")
+                                st.dataframe(df_Metabolite,hide_index=True,)
 
                         space = st.text("")
-
-                        with st.expander("**Perturbations**"):
-                            df_perturbation = getPerturbations(study_id, conn)
-                            st.dataframe(df_perturbation,hide_index=True,)
+                        df_perturbation = getPerturbations(study_id, conn)
+                        if not df_perturbation.empty:
+                            with st.expander("**Perturbations**"):
+                                    st.dataframe(df_perturbation,hide_index=True,)
 
 
                 print("Checkboxes:", down_check)
@@ -278,61 +343,65 @@ def db_search():
                 space2 = st.text("")
                 download = st.form_submit_button("Dowload Data", type = 'primary')
                 if download:
-                    st.write('bla')
+                    selected_study_ids = [study_id for study_id in df_studies['studyId'] if st.session_state.get(f'checkbox{study_id}', False)]
+                    if selected_study_ids:
+                        createzip(selected_study_ids)  # Create zip file from selected folders
+                    
 
 
             # Out of the form
+                        
             if not df_general.empty:
                 st.session_state.to_dashboard = study_ids[-1]
 
-                st.page_link("pages/Visualization_Dashboard.py", label="View selected on Dashboard")
+                st.page_link("pages/Visualization_Dashboard.py", label="**View selected study on Dashboard**")
 
 
 
-    conn = st.connection("BacterialGrowth", type="sql")
+    # conn = st.connection("BacterialGrowth", type="sql")
 
-    # Perform query.
-    df_study = conn.query('SELECT * from Study;', ttl=600)
-    st.dataframe(df_study)
+    # # Perform query.
+    # df_study = conn.query('SELECT * from Study;', ttl=600)
+    # st.dataframe(df_study)
 
-    df_biologicalrep = conn.query('SELECT * from Experiments;', ttl=600)
-    st.dataframe(df_biologicalrep)
+    # df_biologicalrep = conn.query('SELECT * from Experiments;', ttl=600)
+    # st.dataframe(df_biologicalrep)
 
-    df_technicalrep = conn.query('SELECT * from Compartments;', ttl=600)
-    st.dataframe(df_technicalrep)
+    # df_technicalrep = conn.query('SELECT * from Compartments;', ttl=600)
+    # st.dataframe(df_technicalrep)
 
-    df_ReactorSetUp = conn.query('SELECT * from Strains;', ttl=600)
-    st.dataframe(df_ReactorSetUp)
+    # df_ReactorSetUp = conn.query('SELECT * from Strains;', ttl=600)
+    # st.dataframe(df_ReactorSetUp)
 
-    df_Compartments = conn.query('SELECT * from Community;', ttl=600)
-    st.dataframe(df_Compartments)
+    # df_Compartments = conn.query('SELECT * from Community;', ttl=600)
+    # st.dataframe(df_Compartments)
 
-    df_Bacteria = conn.query('SELECT * from CompartmentsPerExperiment;', ttl=600)
-    st.dataframe(df_Bacteria)
+    # df_Bacteria = conn.query('SELECT * from CompartmentsPerExperiment;', ttl=600)
+    # st.dataframe(df_Bacteria)
 
-    df_metabolites = conn.query('SELECT * from TechniquesPerExperiment;', ttl=600)
-    st.dataframe(df_metabolites)
+    # df_metabolites = conn.query('SELECT * from TechniquesPerExperiment;', ttl=600)
+    # st.dataframe(df_metabolites)
 
-    df_metabolitesyn = conn.query('SELECT * from BioReplicatesPerExperiment;', ttl=600)
-    st.dataframe(df_metabolitesyn)
+    # df_metabolitesyn = conn.query('SELECT * from BioReplicatesPerExperiment;', ttl=600)
+    # st.dataframe(df_metabolitesyn)
 
-    df_metabolite_repl = conn.query('SELECT * from Perturbation;', ttl=600)
-    st.dataframe(df_metabolite_repl)
+    # df_metabolite_repl = conn.query('SELECT * from Perturbation;', ttl=600)
+    # st.dataframe(df_metabolite_repl)
 
-    df_metabolitedb = conn.query('SELECT * from Metabolites;', ttl=600)
-    st.dataframe(df_metabolitedb)
+    # df_metabolitedb = conn.query('SELECT * from Metabolites;', ttl=600)
+    # st.dataframe(df_metabolitedb)
 
-    df_Abundances = conn.query('SELECT * from Abundances;', ttl=600)
-    st.dataframe(df_Abundances)
+    # df_Abundances = conn.query('SELECT * from Abundances;', ttl=600)
+    # st.dataframe(df_Abundances)
 
-    df_FC_couts = conn.query('SELECT * from FC_Counts;', ttl=600)
-    st.dataframe(df_FC_couts)
+    # df_FC_couts = conn.query('SELECT * from FC_Counts;', ttl=600)
+    # st.dataframe(df_FC_couts)
 
-    df_BioReplicatesMetadata = conn.query('SELECT * from BioReplicatesMetadata', ttl=600)
-    st.dataframe(df_BioReplicatesMetadata)
+    # df_BioReplicatesMetadata = conn.query('SELECT * from BioReplicatesMetadata', ttl=600)
+    # st.dataframe(df_BioReplicatesMetadata)
 
-    df_MetabolitePerReplicates = conn.query('SELECT * from MetabolitePerExperiment;', ttl=600)
-    st.dataframe(df_MetabolitePerReplicates)
+    # df_MetabolitePerReplicates = conn.query('SELECT * from MetabolitePerExperiment;', ttl=600)
+    # st.dataframe(df_MetabolitePerReplicates)
 
 
 

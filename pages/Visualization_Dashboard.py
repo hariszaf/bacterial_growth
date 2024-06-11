@@ -27,14 +27,21 @@ with open("style.css") as css:
 
 st.title("Visualizing Study Data")
 st.markdown("![badge](https://img.shields.io/badge/status-under%20development-orange?style=for-the-badge)")
+st.markdown(
+    """
+    Search the study that you want to visualize. Select the Biological replicates from the experiments you want to plot. You can also download the
+    raw data of the selected experiments by clicking in the right corner of the tables found on the expandable sections. You can visualiwe different plots 
+    corresponding to Optical density, Flow cytometry, Plate counts, 16S rRNA sequencing, and metabolites concentrations. By clicking of the camera icon at the right corner 
+    of each plot, the images can be save locally in your computer as .png files.
+    """)
 conn = st.connection("BacterialGrowth", type="sql")
 
 
 def dashboard():
-    """
-    If df_growth then init page with selected from Search page data
-    else init the whole page.
-    """
+    # """
+    # If df_growth then init page with selected from Search page data
+    # else init the whole page.
+    # """
 
     df_growth = pd.DataFrame()
     df_reads = pd.DataFrame()
@@ -81,11 +88,12 @@ def dashboard():
         path = relative_path_to_src + f"/Data/Growth/{studyID_to_visualize}"
         growth_file = path + f"/Growth_Metabolites.csv"
         reads_file = path + f"/Sequencing_Reads.csv"
-        st.info(path)
-        if os.path.exists(path):
-            st.info("growth path exists")
-        else:
-            st.info("growth path DO NOT exists")
+        
+        #st.info(path)
+        #if os.path.exists(path):
+        #    st.info("growth path exists")
+        #else:
+        #    st.info("growth path DO NOT exists")
 
 
         try:
@@ -93,6 +101,7 @@ def dashboard():
             subset_columns = df_growth.columns.drop('Position')
             # Drop rows where all values are NaN
             df_growth = df_growth.dropna(subset=subset_columns, how='all')
+            #st.info(df_growth)
             st.session_state['df_growth'] = 0
         except FileNotFoundError:
             df_growth = pd.DataFrame()
@@ -122,6 +131,7 @@ def content(df_growth, df_reads, studyID_to_visualize, conn):
                     with st.expander(f"{i}"):
                         st.write(f"{j}")
                         biorep_list = k.split(",")
+                        biorep_list.append("Mean of Biological Replicates")
                         for rep in biorep_list:
                             checkbox_key = f"checkbox{i}:biologicalreplicate:{rep}"
                             checkbox_states[checkbox_key] = st.checkbox(f"{rep}", key=checkbox_key, value=checkbox_states.get(checkbox_key, False))
@@ -129,12 +139,12 @@ def content(df_growth, df_reads, studyID_to_visualize, conn):
                 st.warning("Study does not contain growth data")
 
         experiment_with_bioreps = filter_dict_states(st.session_state)
+        #st.info(experiment_with_bioreps)
         return experiment_with_bioreps
 
 
 
 def tabs_plots(experiment_with_bioreps):
-
 
     with col2:
         result_growth_df_dict, result_reads_df_dict = filter_df(experiment_with_bioreps,df_growth,df_reads)
@@ -205,7 +215,7 @@ def tabs_plots(experiment_with_bioreps):
                     st.plotly_chart(fig, use_container_width=True)
 
             for exp, reads_df in result_reads_df_dict.items():
-                counts_col = [col for col in reads_df.columns if not col.endswith('_reads')]
+                counts_col = [col for col in reads_df.columns if not col.endswith('_reads') and not col.endswith('_std') and col not in ["Biological_Replicate_id", "Time","Position"]]
                 if counts_col:
                     with st.expander(f"**FC counts per Species: {exp}**"):
                         st.dataframe(reads_df)
@@ -268,13 +278,13 @@ def tabs_plots(experiment_with_bioreps):
 
         with tab6:
             for exp, growth_df in result_growth_df_dict.items():
-                columns_to_keep = [col for col in growth_df.columns if not col.endswith('_std') and col not in ["Biological_Replicate_id", "Time", "FC", "OD","Plate_counts","Position"]]
+                columns_to_keep = [col for col in growth_df.columns if not col.endswith('_std') and col not in ["Biological_Replicate_id", "Time", "FC", "OD","Plate_counts","Position","pH"]]
                 if columns_to_keep:
                     with st.expander(f"**Metabolites: {exp}**"):
                         st.dataframe(growth_df)
                     unique_biorep_ids = growth_df['Biological_Replicate_id'].unique()
                     for biorepID in unique_biorep_ids:
-                        filtered_per_biorep_df = growth_df[reads_df['Biological_Replicate_id'] == biorepID]
+                        filtered_per_biorep_df = growth_df[growth_df['Biological_Replicate_id'] == biorepID]
                         filtered_per_biorep_df = filtered_per_biorep_df.dropna(axis=1, how='all')
                         metabolites_columns = filtered_per_biorep_df.filter(columns_to_keep).columns
                         melted_df = filtered_per_biorep_df.melt(id_vars=['Time', 'Biological_Replicate_id'],
@@ -305,9 +315,9 @@ def tabs_plots(experiment_with_bioreps):
 df_growth, df_reads, studyID_to_visualize, conn = dashboard()
 #st.info(df_growth)
 col1, col2 = st.columns([0.35, 0.65])
-try:
-    df_growth,experiment_with_bioreps=content(df_growth, df_reads, studyID_to_visualize, conn)
-    tabs_plots(df_growth,experiment_with_bioreps)
-except:
-    st.write("nothing yet.")
+experiment_with_bioreps=content(df_growth, df_reads, studyID_to_visualize, conn)
+#st.info(experiment_with_bioreps)
+tabs_plots(experiment_with_bioreps)
+#except:
+#    st.write("nothing yet.")
 
