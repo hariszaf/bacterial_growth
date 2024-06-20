@@ -31,7 +31,9 @@ def execute(phrase):
               host=st.secrets.connections.BacterialGrowth.host,
               port=st.secrets.connections.BacterialGrowth.port,
               database=st.secrets.connections.BacterialGrowth.database,
-              auth_plugin='mysql_native_password'
+              ssl_ca = CA_PATH,
+              ssl_verify_cert = True,
+              ssl_verify_identity = True
             )
 
         cursor = cnx.cursor()
